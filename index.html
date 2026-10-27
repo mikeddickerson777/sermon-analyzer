@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1689 Sermon Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .metric-bar { transition: width 0.8s ease-out; }
+        .tab-active { background-color: #2563eb; color: white; border-color: #2563eb; }
+        .tab-inactive { background-color: #1e293b; color: #94a3b8; border-color: #334155; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans flex flex-col justify-between">
+
+    <!-- Navigation Header -->
+    <header class="border-b border-slate-800 bg-slate-950 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">🎙️</span>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">1689 Sermon Analyzer</h1>
+                    <p class="text-xs text-slate-400">Multimodal Expository Engine (Gemini 1.5 Flash)</p>
+                </div>
+            </div>
+            <nav class="flex gap-2">
+                <button onclick="switchScreen('dashboard')" id="nav-dashboard" class="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white transition">
+                    Sermon Archive
+                </button>
+                <button onclick="switchScreen('submit')" id="nav-submit" class="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                    Analyze Sermon
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8 flex-grow w-full">
+        
+        <!-- SCREEN 1: DASHBOARD -->
+        <section id="screen-dashboard" class="space-y-6">
+            <div class="bg-slate-950 p-6 rounded-xl border border-slate-800 flex flex-col md:flex-row md:items-start justify-between gap-6">
+                <div class="space-y-4">
+                    <p class="text-sm text-slate-300 max-w-3xl leading-relaxed">
+                        This tool evaluates sermons for strict adherence to the 1689 Second London Baptist Confession and standard homiletical excellence. The final composite score represents a 50/50 split between theological precision and expository clarity. 
+                    </p>
+                </div>
+                <button onclick="refreshFromCloud()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-lg text-xs font-semibold text-slate-200 transition shrink-0">
+                    🔄 Sync Archive
+                </button>
+            </div>
+
+            <div class="relative">
+                <input type="text" id="search-input" oninput="filterSermons()" placeholder="Search sermons by preacher or title..." class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition">
+            </div>
+
+            <div id="sermon-catalog-grid" class="grid gap-4 sm:grid-cols-2">
+                <!-- Stored dynamically -->
+            </div>
+        </section>
+
+        <!-- SCREEN 2: USER SUBMISSION FORM -->
+        <section id="screen-submit" class="hidden max-w-2xl mx-auto bg-slate-950 border border-slate-800 rounded-xl p-6 space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-xl font-bold text-white mb-2">Evaluate a Sermon</h2>
+                <p class="text-sm text-slate-400 leading-relaxed">
+                    Enter the preacher's name, title, and select your media format below. Gemini can read text, parse YouTube transcripts, or listen directly to uploaded audio files.
+                </p>
+            </div>
+
+            <div id="form-error-toast" class="hidden bg-rose-500/10 border border-rose-500/30 text-rose-400 p-4 rounded-lg text-sm flex items-center gap-2">
+                <span>⚠️</span> <span id="form-error-text">Please resolve form errors before proceeding.</span>
+            </div>
+
+            <div class="space-y-5">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Preacher (Required)</label>
+                        <input type="text" id="form-preacher" placeholder="e.g., Charles Spurgeon" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-blue-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sermon Title (Required)</label>
+                        <input type="text" id="form-title" placeholder="e.g., Compel Them to Come In" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-blue-500 transition">
+                    </div>
+                </div>
+
+                <!-- Input Type Tabs -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Media Format</label>
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="switchTab('text')" id="tab-text" class="tab-active flex-1 py-2 border rounded-lg text-sm font-medium transition">Manuscript / Text</button>
+                        <button onclick="switchTab('youtube')" id="tab-youtube" class="tab-inactive flex-1 py-2 border rounded-lg text-sm font-medium transition">YouTube Link</button>
+                        <button onclick="switchTab('audio')" id="tab-audio" class="tab-inactive flex-1 py-2 border rounded-lg text-sm font-medium transition">Audio Upload</button>
+                    </div>
+
+                    <!-- Dynamic Input Areas -->
+                    <div id="input-text" class="block">
+                        <textarea id="form-text" rows="8" placeholder="Paste the full sermon manuscript or transcript here..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-blue-500 transition"></textarea>
+                    </div>
+                    
+                    <div id="input-youtube" class="hidden">
+                        <input type="url" id="form-youtube" placeholder="https://www.youtube.com/watch?v=..." class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-blue-500 transition">
+                    </div>
+
+                    <div id="input-audio" class="hidden">
+                        <input type="file" id="form-audio" accept="audio/*" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 text-slate-200 focus:outline-none focus:border-blue-500 transition file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500">
+                        <p class="text-xs text-slate-500 mt-2">Max file size ~25MB (Standard MP3). Large audio files may take 1-2 minutes to process.</p>
+                    </div>
+                </div>
+
+                <button onclick="processSermon()" class="w-full bg-blue-600 text-white font-medium py-3 rounded-lg hover:bg-blue-500 transition flex justify-center items-center gap-2 mt-4">
+                    <span>✨</span> Analyze Sermon
+                </button>
+            </div>
+        </section>
+
+        <!-- SCREEN 3: ANALYSIS REPORT -->
+        <section id="screen-report" class="hidden max-w-3xl mx-auto space-y-6">
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 text-center space-y-4">
+                <div class="text-xs font-semibold text-emerald-400 uppercase tracking-widest">Sermon Analysis Complete</div>
+                <h2 id="report-title" class="text-2xl font-bold text-white">Sermon Title</h2>
+                <p id="report-preacher" class="text-sm text-slate-400">Preacher Name</p>
+                
+                <div class="inline-block bg-slate-900 border border-slate-800 px-8 py-5 rounded-xl mt-2">
+                    <div class="text-xs text-slate-500 uppercase tracking-wider font-medium mb-1">Composite Assessment Score</div>
+                    <div id="report-total-score" class="text-5xl font-black text-blue-400">0.0 <span class="text-lg text-slate-500 font-normal">/ 10</span></div>
+                </div>
+            </div>
+
+            <!-- Dual Scoring Bars -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 space-y-6">
+                <div>
+                    <div class="flex justify-between text-sm font-bold mb-2">
+                        <span class="text-indigo-400 uppercase tracking-wider">Theological Adherence (1689 LBCF)</span>
+                        <span id="score-theo-val" class="text-white">0.0/10</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden">
+                        <div id="bar-theo" class="metric-bar bg-indigo-500 h-full w-0"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-sm font-bold mb-2">
+                        <span class="text-emerald-400 uppercase tracking-wider">Homiletical Excellence</span>
+                        <span id="score-homi-val" class="text-white">0.0/10</span>
+                    </div>
+                    <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden">
+                        <div id="bar-homi" class="metric-bar bg-emerald-500 h-full w-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pass/Fail Checks -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-5">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Christocentric / Gospel Focus</h4>
+                    <p id="report-christ-check" class="text-sm text-slate-300 font-medium">...</p>
+                </div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-5">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Expository Fidelity</h4>
+                    <p id="report-expo-check" class="text-sm text-slate-300 font-medium">...</p>
+                </div>
+            </div>
+
+            <!-- Detailed Summaries -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 space-y-6">
+                <div>
+                    <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-2">Theological Summary</h4>
+                    <p id="report-theo-summary" class="text-sm text-slate-300 leading-relaxed font-normal">...</p>
+                </div>
+                <hr class="border-slate-800">
+                <div>
+                    <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2">Homiletical Summary</h4>
+                    <p id="report-homi-summary" class="text-sm text-slate-300 leading-relaxed font-normal">...</p>
+                </div>
+            </div>
+
+            <button onclick="switchScreen('dashboard')" class="w-full bg-slate-800 text-slate-200 font-medium py-3 rounded-lg hover:bg-slate-700 transition">
+                ← Return to Sermon Archive
+            </button>
+        </section>
+    </main>
+
+    <!-- LOADING MODAL -->
+    <div id="loading-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex flex-col justify-center items-center space-y-3">
+        <div class="animate-spin rounded-full h-10 w-10 border-2 border-blue-500 border-t-transparent"></div>
+        <p id="loading-text" class="text-sm font-medium text-slate-400 tracking-wide text-center px-6">Initializing Multimodal Processing...<br><span class="text-xs text-slate-500">(Audio files may take a minute)</span></p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-950 py-4 text-center text-xs text-slate-500">
+        <p>© 2026 1689 Sermon Analyzer. Built on Gemini 1.5 Flash.</p>
+    </footer>
+
+    <script>
+        // 🚨 PRE-INJECTED WEB APP URL
+        const DATABASE_API_URL = "https://script.google.com/macros/s/AKfycbxu2RqY1Zls_IvuhsEetB4GEWkLz1IV7XBotiCCstxaGiAU4qbuukvxSup8fL4uFx6qSw/exec"; 
+
+        let sermons = [];
+        let currentTab = 'text';
+
+        const localData = localStorage.getItem('sermons_db_v1');
+        if (localData) {
+            try { sermons = JSON.parse(localData); } catch(e) { sermons = []; }
+        }
+
+        function switchScreen(screenName) {
+            document.getElementById('screen-dashboard').classList.add('hidden');
+            document.getElementById('screen-submit').classList.add('hidden');
+            document.getElementById('screen-report').classList.add('hidden');
+            document.getElementById('form-error-toast').classList.add('hidden'); 
+            document.getElementById(`screen-${screenName}`).classList.remove('hidden');
+
+            document.getElementById('nav-dashboard').className = "px-4 py-2 rounded-lg text-sm font-medium " + (screenName === 'dashboard' ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700") + " transition";
+            document.getElementById('nav-submit').className = "px-4 py-2 rounded-lg text-sm font-medium " + (screenName === 'submit' ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700") + " transition";
+        }
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            ['text', 'youtube', 'audio'].forEach(t => {
+                document.getElementById(`tab-${t}`).className = t === tabName ? "tab-active flex-1 py-2 border rounded-lg text-sm font-medium transition" : "tab-inactive flex-1 py-2 border rounded-lg text-sm font-medium transition";
+                document.getElementById(`input-${t}`).className = t === tabName ? "block" : "hidden";
+            });
+        }
+
+        function displayCatalog(sermonsToShow) {
+            const container = document.getElementById('sermon-catalog-grid');
+            container.innerHTML = '';
+            
+            if (sermonsToShow.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500 bg-slate-950/50 rounded-xl border border-slate-800/50">No sermons analyzed yet. Submit a sermon to begin.</div>`;
+                return;
+            }
+
+            sermonsToShow.forEach(sermon => {
+                const totalScore = parseFloat(sermon.totalScore || 0).toFixed(1);
+                let badgeColor = "text-blue-400 border-blue-500/30 bg-blue-500/10";
+                if (totalScore < 7.0) badgeColor = "text-amber-400 border-amber-500/30 bg-amber-500/10";
+                if (totalScore < 5.0) badgeColor = "text-rose-400 border-rose-500/30 bg-rose-500/10";
+
+                const card = document.createElement('div');
+                card.className = "bg-slate-950 border border-slate-800 rounded-xl p-5 hover:border-slate-700 transition cursor-pointer flex flex-col justify-between";
+                card.onclick = () => showSermonDetails(sermon);
+                
+                card.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-start gap-2">
+                            <h3 class="font-bold text-white group-hover:text-blue-400 transition leading-tight">${sermon.title}</h3>
+                            <span class="px-2.5 py-1 rounded-md text-xs font-black border tracking-wider ${badgeColor}">${totalScore}</span>
+                        </div>
+                        <p class="text-xs text-slate-400">Preached by ${sermon.preacher}</p>
+                    </div>
+                    <div class="mt-3 flex gap-2">
+                        <span class="text-[10px] uppercase tracking-wide bg-slate-900 border border-slate-700 text-slate-400 px-2 py-1 rounded">Source: ${sermon.inputType}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function filterSermons() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const filtered = sermons.filter(s => (s.title && s.title.toLowerCase().includes(query)) || (s.preacher && s.preacher.toLowerCase().includes(query)));
+            displayCatalog(filtered);
+        }
+
+        function showSermonDetails(sermon) {
+            document.getElementById('report-title').innerText = sermon.title;
+            document.getElementById('report-preacher').innerText = `Preached by ${sermon.preacher}`;
+            document.getElementById('report-total-score').innerHTML = `${parseFloat(sermon.totalScore).toFixed(1)} <span class="text-lg text-slate-500 font-normal">/ 10</span>`;
+            
+            document.getElementById('score-theo-val').innerText = `${parseFloat(sermon.theologyScore).toFixed(1)}/10`;
+            document.getElementById('score-homi-val').innerText = `${parseFloat(sermon.homileticsScore).toFixed(1)}/10`;
+            
+            document.getElementById('report-theo-summary').innerText = sermon.theologySummary;
+            document.getElementById('report-homi-summary').innerText = sermon.homileticsSummary;
+            document.getElementById('report-christ-check').innerText = sermon.christocentricCheck;
+            document.getElementById('report-expo-check').innerText = sermon.expositoryCheck;
+
+            switchScreen('report');
+            
+            setTimeout(() => {
+                document.getElementById('bar-theo').style.width = `${sermon.theologyScore * 10}%`;
+                document.getElementById('bar-homi').style.width = `${sermon.homileticsScore * 10}%`;
+            }, 150);
+        }
+
+        function processSermon() {
+            const preacher = document.getElementById('form-preacher').value.trim();
+            const title = document.getElementById('form-title').value.trim();
+            const errorToast = document.getElementById('form-error-toast');
+            const errorText = document.getElementById('form-error-text');
+
+            if (!preacher || !title) {
+                errorText.innerText = "Preacher Name and Sermon Title are required.";
+                errorToast.classList.remove('hidden');
+                return;
+            }
+
+            let payload = { id: Date.now(), preacher, title, inputType: currentTab };
+
+            if (currentTab === 'text') {
+                const text = document.getElementById('form-text').value.trim();
+                if (!text) return showError("Manuscript text is empty.");
+                payload.text = text;
+                sendToBackend(payload);
+            } 
+            else if (currentTab === 'youtube') {
+                const url = document.getElementById('form-youtube').value.trim();
+                if (!url) return showError("YouTube URL is required.");
+                payload.youtubeUrl = url;
+                sendToBackend(payload);
+            } 
+            else if (currentTab === 'audio') {
+                const fileInput = document.getElementById('form-audio');
+                if (!fileInput.files.length) return showError("Please select an audio file to upload.");
+                
+                const file = fileInput.files[0];
+                document.getElementById('loading-text').innerHTML = "Encoding audio file...<br><span class='text-xs text-slate-500'>Please wait, do not close browser.</span>";
+                document.getElementById('loading-modal').classList.remove('hidden');
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataUrl = e.target.result;
+                    payload.audioMimeType = dataUrl.split(';')[0].split(':')[1];
+                    payload.audioBase64 = dataUrl.split(',')[1];
+                    sendToBackend(payload);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function showError(msg) {
+            document.getElementById('form-error-text').innerText = msg;
+            document.getElementById('form-error-toast').classList.remove('hidden');
+        }
+
+        function sendToBackend(payload) {
+            document.getElementById('form-error-toast').classList.add('hidden');
+            document.getElementById('loading-text').innerHTML = "Analyzing Sermon Content...<br><span class='text-xs text-slate-500'>Routing through Gemini 1.5 Flash</span>";
+            document.getElementById('loading-modal').classList.remove('hidden');
+
+            fetch(DATABASE_API_URL, {
+                method: "POST",
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.text())
+            .then(rawText => {
+                try {
+                    const jsonResponse = JSON.parse(rawText);
+                    if (jsonResponse.status === "error") {
+                        alert("BACKEND SCRIPT ERROR: " + jsonResponse.message);
+                        document.getElementById('loading-modal').classList.add('hidden');
+                        return;
+                    }
+                    
+                    // Clear inputs
+                    document.getElementById('form-preacher').value = '';
+                    document.getElementById('form-title').value = '';
+                    document.getElementById('form-text').value = '';
+                    document.getElementById('form-youtube').value = '';
+                    document.getElementById('form-audio').value = '';
+                    
+                    sermons.push(jsonResponse.data);
+                    localStorage.setItem('sermons_db_v1', JSON.stringify(sermons));
+                    document.getElementById('loading-modal').classList.add('hidden');
+                    showSermonDetails(jsonResponse.data);
+
+                } catch (parseError) {
+                    alert("SERVER ERROR: Google did not return JSON. It returned: " + rawText.substring(0, 150) + "...");
+                    document.getElementById('loading-modal').classList.add('hidden');
+                }
+            })
+            .catch(err => {
+                alert("NETWORK BLOCKED: " + err.message);
+                document.getElementById('loading-modal').classList.add('hidden');
+            });
+        }
+
+        function refreshFromCloud() {
+            if (!DATABASE_API_URL) return;
+            
+            document.getElementById('loading-text').innerText = "Downloading updated sermon archive...";
+            document.getElementById('loading-modal').classList.remove('hidden');
+
+            fetch(DATABASE_API_URL)
+                .then(res => res.json())
+                .then(cloudSermons => {
+                    document.getElementById('loading-modal').classList.add('hidden');
+                    if (Array.isArray(cloudSermons)) {
+                        sermons = cloudSermons;
+                        localStorage.setItem('sermons_db_v1', JSON.stringify(sermons));
+                        displayCatalog(sermons);
+                        switchScreen('dashboard');
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('loading-modal').classList.add('hidden');
+                    console.log(err);
+                });
+        }
+
+        if (DATABASE_API_URL) {
+            refreshFromCloud();
+        } else {
+            displayCatalog(sermons);
+        }
+    </script>
+</body>
+</html>
